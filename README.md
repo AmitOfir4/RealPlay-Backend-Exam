@@ -116,9 +116,13 @@ Redis is therefore a **derived view** of the `Bet` table. If Redis is flushed mi
 ## Tests
 
 ```bash
-npm test        # unit — no infra needed (13 tests)
+npm test        # unit — no infra needed (14 tests)
 npm run test:int  # integration — needs docker compose up -d (6 tests)
 ```
+
+> **Note:** stop any running `npm run dev:workers` before `npm run test:int` — both share the
+> same Redis/BullMQ queue, so a second worker can race the suite's own worker and cause a
+> spurious finalization failure.
 
 - **Unit:** ingestion rules (window matching, multi-tournament fan-out, duplicate handling), leaderboard rank math and live/final switching, competition-ranking edge cases.
 - **Integration** (real Postgres + Redis): end-to-end bet ingestion, duplicate replay, leaderboard ordering and pagination, validation failures, and finalization through the real BullMQ worker including tie ranking.
