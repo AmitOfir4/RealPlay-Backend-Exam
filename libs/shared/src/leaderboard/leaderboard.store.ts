@@ -99,9 +99,4 @@ export class LeaderboardStore {
       .expire(leaderboardKey(tournamentId), ttlSeconds)
       .exec();
   }
-
-  /** Drop live keys entirely (used by the rebuild script before replaying bets). */
-  async clear(tournamentId: string): Promise<void> {
-    await this.redis.del(betIdsKey(tournamentId), leaderboardKey(tournamentId));
-  }
 }

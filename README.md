@@ -80,7 +80,7 @@ Each bet touches two stores, so the order and the failure window between them ar
 
 Both steps are independently idempotent, so a crash between them self-heals: the retry finds the Postgres row already there (skipped) and the Lua guard either applies the score once or confirms it was applied. Concurrent duplicates can't double-count because the check-and-increment is a single atomic script.
 
-Redis is therefore a **derived view** of the `Bet` table — a live-read cache, never the source of truth. If Redis is flushed mid-tournament, `npm run rebuild:leaderboard -- <tournamentId>` reconstructs the live state from Postgres; correctness of the *final* result never depends on that rebuild (see below).
+Redis is therefore a **derived view** of the `Bet` table — a live-read cache, never the source of truth. If Redis is flushed mid-tournament, `npm run rebuild:leaderboard -- <tournamentId>` reconstructs the live leaderboard from Postgres. This is purely an operational convenience for restoring *live reads* — final placements are aggregated from Postgres regardless (see Finalization), so the correctness of a tournament's result never depends on this rebuild.
 
 ### Finalization
 
