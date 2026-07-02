@@ -80,13 +80,14 @@ Each bet touches two stores, so the order and the failure window between them ar
 
 Both steps are independently idempotent, so a crash between them self-heals: the retry finds the Postgres row already there (skipped) and the Lua guard either applies the score once or confirms it was applied. Concurrent duplicates can't double-count because the check-and-increment is a single atomic script.
 
-Redis is therefore a **derived view** of the `Bet` table. If Redis is flushed mid-tournament, `npm run rebuild:leaderboard -- <tournamentId>` reconstructs the live state from Postgres.
+Redis is therefore a **derived view** of the `Bet` table — a live-read cache, never the source of truth. If Redis is flushed mid-tournament, `npm run rebuild:leaderboard -- <tournamentId>` reconstructs the live state from Postgres; correctness of the *final* result never depends on that rebuild (see below).
 
 ### Finalization
 
 - Creating a tournament enqueues a **delayed BullMQ job** that fires at `endsAt` + 5s grace (absorbs slightly-late events and clock skew).
-- The processor snapshots the ZSET, computes **competition ranking** ("1224": ties share a rank), and in one transaction rewrites placements + flips status to `FINALIZED`. Fully idempotent — safe to retry or double-run.
-- **Late bets:** ingestion only matches `ACTIVE` tournaments, so once placements are written the leaderboard can never silently diverge from them. A bet arriving after finalization simply doesn't count towards that tournament.
+- The processor **aggregates final standings from Postgres** (`SUM(amount) GROUP BY playerId`, backed by the covering `(tournamentId, playerId, amount)` index so it runs as an index-only scan) — not from Redis — computes **competition ranking** ("1224": ties share a rank), and in one transaction rewrites placements + flips status to `FINALIZED`. Fully idempotent — safe to retry or double-run.
+- **Why aggregate from Postgres, not the ZSET:** placements are the durable record a real system pays out from, so they're computed from the source of truth. A Redis flush before finalization would otherwise let the sweeper snapshot an empty/partial ZSET into permanent placements; sourcing from Postgres removes that failure mode entirely.
+- **Late bets:** ingestion only matches `ACTIVE` tournaments, and a bet arriving after finalization simply doesn't count towards that tournament. One narrow race remains: a bet can pass the `ACTIVE` check just before the finalizer flips the status, then commit its row *after* the aggregation query has run — leaving a `Bet` row not reflected in the placements. The 5s grace makes this rare for on-time traffic, but it isn't fully closed: doing so would require gating ingestion on the status transition transactionally (e.g. an `INSERT … SELECT` conditioned on `status = ACTIVE`, or a row-level lock on the tournament). That's out of scope here, and the durable `Bet` rows mean any such discrepancy is auditable and reconcilable after the fact.
 - **Lost-job safety net:** a repeatable **sweeper** job (every 60s) finds tournaments with `endsAt < now` still `ACTIVE` and re-enqueues finalization. Deterministic job IDs (`finalize-<tournamentId>`) prevent double-scheduling; the processor's status check makes a race harmless anyway. So finalization survives a Redis flush or a worker that was down at fire time.
 
 ### Leaderboard reads

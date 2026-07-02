@@ -26,15 +26,4 @@ describe('LeaderboardStore', () => {
     await store.getPage('t1', 10, 20);
     expect(redis.zrange).toHaveBeenCalledWith('t:{t1}:lb', 10, 29, 'REV', 'WITHSCORES');
   });
-
-  it('breaks score ties by playerId for deterministic final standings', async () => {
-    const { store } = makeStore(['zed', '300', 'amy', '300', 'top', '900']);
-
-    const standings = await store.getAll('t1');
-    expect(standings).toEqual([
-      { playerId: 'top', score: 900 },
-      { playerId: 'amy', score: 300 },
-      { playerId: 'zed', score: 300 },
-    ]);
-  });
 });

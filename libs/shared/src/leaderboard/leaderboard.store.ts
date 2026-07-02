@@ -91,17 +91,6 @@ export class LeaderboardStore {
     return { total, entries };
   }
 
-  /** Full standings, score DESC then playerId ASC — used by the snapshot job. */
-  async getAll(tournamentId: string): Promise<Array<{ playerId: string; score: number }>> {
-    const raw = await this.redis.zrange(leaderboardKey(tournamentId), 0, -1, 'REV', 'WITHSCORES');
-    const players: Array<{ playerId: string; score: number }> = [];
-    for (let i = 0; i < raw.length; i += 2) {
-      players.push({ playerId: raw[i], score: Number(raw[i + 1]) });
-    }
-    players.sort((a, b) => b.score - a.score || a.playerId.localeCompare(b.playerId));
-    return players;
-  }
-
   /** Keep live keys around briefly after finalization, then let them expire. */
   async expire(tournamentId: string, ttlSeconds: number): Promise<void> {
     await this.redis

@@ -25,7 +25,9 @@ export class IngestBetDto {
 
   @ApiProperty({
     example: EXAMPLE_NOW_ISO,
-    description: 'Event time (defaults to now). Counts only where startsAt <= createdAt <= endsAt.',
+    description:
+      'Event time of the bet (required). Counts only where startsAt <= createdAt <= endsAt. ' +
+      'The docs pre-fill this with the current time as a convenience — it is not defaulted server-side.',
   })
   @IsISO8601()
   createdAt: string;

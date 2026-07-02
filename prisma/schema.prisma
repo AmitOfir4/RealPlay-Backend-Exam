@@ -43,8 +43,9 @@ model Bet {
 
   // durable idempotency: one externalBetId per tournament
   @@unique([tournamentId, externalBetId])
-  // leaderboard rebuild: sum per player
-  @@index([tournamentId, playerId])
+  // finalization + leaderboard rebuild: SUM(amount) per player. amount is in the
+  // index so the aggregate runs as an index-only scan (no heap fetches).
+  @@index([tournamentId, playerId, amount])
 }
 
 model TournamentPlacement {

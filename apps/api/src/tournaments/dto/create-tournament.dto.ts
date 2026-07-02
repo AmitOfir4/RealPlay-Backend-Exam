@@ -8,13 +8,17 @@ export class CreateTournamentDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: EXAMPLE_NOW_ISO, description: 'Defaults to now for easy testing.' })
+  @ApiProperty({
+    example: EXAMPLE_NOW_ISO,
+    description: 'Tournament start (required). The docs pre-fill with the current time for convenience.',
+  })
   @IsISO8601()
   startsAt: string;
 
   @ApiProperty({
     example: EXAMPLE_END_OF_TOMORROW_ISO,
-    description: 'Must be after startsAt. Defaults to end of tomorrow.',
+    description:
+      'Tournament end (required); must be after startsAt. The docs pre-fill with end of tomorrow for convenience.',
   })
   @IsISO8601()
   endsAt: string;
