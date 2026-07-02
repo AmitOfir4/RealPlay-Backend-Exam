@@ -1,8 +1,5 @@
 /**
- * Rebuilds a tournament's live Redis state (bet-id set + leaderboard ZSET)
- * from the durable Bet rows in Postgres. Redis is a derived view of the bets
- * table, so it can always be reconstructed after a Redis outage or flush.
- *
+ * Rebuilds a tournament's live Redis state from the Bet rows in Postgres.
  * Usage: npm run rebuild:leaderboard -- <tournamentId>
  */
 import 'dotenv/config';

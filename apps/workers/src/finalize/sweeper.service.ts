@@ -13,11 +13,8 @@ import {
 } from '../../../../libs/shared/src/queue/queue.constants';
 
 /**
- * Safety net for lost finalize jobs: if the delayed job disappeared (Redis
- * flush) or the worker was down when it fired, tournaments would stay ACTIVE
- * forever. A repeatable sweep finds overdue ACTIVE tournaments and re-enqueues
- * finalization. The deterministic jobId prevents double-scheduling, and the
- * processor's status check makes a double-run harmless anyway.
+ * Safety net: finds overdue ACTIVE tournaments and re-drives their finalize
+ * job if it was lost (Redis flush, worker down) or exhausted its retries.
  */
 @Injectable()
 export class SweeperService implements OnApplicationBootstrap {
@@ -43,8 +40,7 @@ export class SweeperService implements OnApplicationBootstrap {
 
     let reenqueued = 0;
     for (const { id } of overdue) {
-      // Per-tournament isolation: one bad job must not abort the whole sweep and
-      // starve every later overdue tournament this cycle.
+      // one bad job must not abort the rest of the sweep
       try {
         if (await this.reenqueue(id)) reenqueued++;
       } catch (err) {
@@ -57,27 +53,18 @@ export class SweeperService implements OnApplicationBootstrap {
     }
   }
 
-  /**
-   * Re-drives finalization for one overdue tournament, choosing the action by
-   * the finalize job's current state. Returns true if it kicked off a run.
-   *
-   * The deterministic jobId means a lingering job "occupies" the id: BullMQ's
-   * `add()` is a silent no-op while a job with that id exists. So a job that
-   * exhausted its attempts (state `failed`, kept by removeOnFail: false) would
-   * never restart via `add()` alone — it needs an explicit `retry()`.
-   */
+  // BullMQ's add() is a silent no-op while any job holds the same jobId — a
+  // failed job (kept by removeOnFail: false) must be retry()'d, not re-added.
   private async reenqueue(id: string): Promise<boolean> {
     const jobId = finalizeJobId(id);
     const existing = await this.queue.getJob(jobId);
     const state = existing ? await existing.getState() : null;
 
     if (state === 'failed') {
-      // Exhausted its attempts — actually re-run it (add() would no-op here).
       await existing!.retry();
       return true;
     }
     if (!existing) {
-      // Job was lost (e.g. Redis flush) or never scheduled — schedule it fresh.
       await this.queue.add(FINALIZE_JOB, { tournamentId: id } satisfies FinalizeJobData, {
         jobId,
         attempts: 5,
@@ -87,8 +74,6 @@ export class SweeperService implements OnApplicationBootstrap {
       });
       return true;
     }
-    // active | waiting | delayed | completed: a run is already pending or done;
-    // the processor's status check makes any eventual run idempotent. Leave it.
-    return false;
+    return false; // active/waiting/delayed/completed — a run is pending or done
   }
 }

@@ -30,9 +30,7 @@ export class TournamentsService {
       data: { name: dto.name, startsAt, endsAt },
     });
 
-    // Snapshot job fires shortly after endsAt. jobId is deterministic so a
-    // re-enqueue (e.g. by the sweeper) can never schedule it twice while one
-    // is pending; the processor itself is idempotent as a second line of defense.
+    // Deterministic jobId: a sweeper re-enqueue can't schedule a second job.
     const delay = Math.max(0, endsAt.getTime() - Date.now() + FINALIZE_GRACE_MS);
     await this.queue.add(
       FINALIZE_JOB,
@@ -54,7 +52,6 @@ export class TournamentsService {
     return this.prisma.tournament.findUnique({ where: { id } });
   }
 
-  /** Paginated list of ACTIVE (not yet finalized) tournaments, newest first. */
   async listActive(
     offset: number,
     limit: number,

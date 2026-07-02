@@ -39,12 +39,9 @@ export class FinalizeProcessor extends WorkerHost {
   }
 
   /**
-   * Snapshots the final standings into TournamentPlacement rows and flips the
-   * tournament to FINALIZED. Standings are aggregated from the durable Bet
-   * table (the source of truth) rather than Redis, so a Redis flush before
-   * finalization can never write a wrong or empty permanent result. Redis stays
-   * a live-read cache only. Idempotent: a retry after a partial failure
-   * rewrites the placements from scratch inside one transaction.
+   * Writes final placements and flips the tournament to FINALIZED. Standings
+   * are aggregated from the Bet table, not Redis, so a Redis flush can't
+   * corrupt the permanent result. Idempotent — safe to retry or double-run.
    */
   async finalizeTournament(tournamentId: string): Promise<void> {
     const tournament = await this.prisma.tournament.findUnique({ where: { id: tournamentId } });
@@ -53,11 +50,9 @@ export class FinalizeProcessor extends WorkerHost {
       return;
     }
     if (tournament.status === 'FINALIZED') {
-      return; // already done (e.g. sweeper + delayed job raced)
+      return;
     }
 
-    // Sum per player straight from Postgres, score DESC then playerId ASC for a
-    // deterministic tie order. Backed by the (tournamentId, playerId) index.
     const grouped = await this.prisma.bet.groupBy({
       by: ['playerId'],
       where: { tournamentId },

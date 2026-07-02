@@ -86,15 +86,15 @@ Redis is therefore a **derived view** of the `Bet` table — a live-read cache, 
 
 - Creating a tournament enqueues a **delayed BullMQ job** that fires at `endsAt` + 5s grace (absorbs slightly-late events and clock skew).
 - The processor **aggregates final standings from Postgres** (`SUM(amount) GROUP BY playerId`, backed by the covering `(tournamentId, playerId, amount)` index so it runs as an index-only scan) — not from Redis — computes **competition ranking** ("1224": ties share a rank), and in one transaction rewrites placements + flips status to `FINALIZED`. Fully idempotent — safe to retry or double-run.
-- **Why aggregate from Postgres, not the ZSET:** placements are the durable record a real system pays out from, so they're computed from the source of truth. A Redis flush before finalization would otherwise let the sweeper snapshot an empty/partial ZSET into permanent placements; sourcing from Postgres removes that failure mode entirely.
-- **Late bets:** ingestion only matches `ACTIVE` tournaments, and a bet arriving after finalization simply doesn't count towards that tournament. One narrow race remains: a bet can pass the `ACTIVE` check just before the finalizer flips the status, then commit its row *after* the aggregation query has run — leaving a `Bet` row not reflected in the placements. The 5s grace makes this rare for on-time traffic, but it isn't fully closed: doing so would require gating ingestion on the status transition transactionally (e.g. an `INSERT … SELECT` conditioned on `status = ACTIVE`, or a row-level lock on the tournament). That's out of scope here, and the durable `Bet` rows mean any such discrepancy is auditable and reconcilable after the fact.
+- **Why from Postgres and not the ZSET?** Placements are what a real system pays out from, so they come from the durable store. If they were read from Redis, a flush before finalization could write empty or partial placements and lock them in.
+- **Late bets:** a bet that arrives after finalization doesn't count, since ingestion only matches `ACTIVE` tournaments. One narrow race is left open: a bet can pass the `ACTIVE` check just before the status flips, then commit after the aggregation query has run, leaving a `Bet` row that isn't in the placements. The 5s grace makes this rare. Closing it fully would need ingestion gated on the status transition (a conditional `INSERT … SELECT`, or a row lock on the tournament), which I left out of scope; the durable `Bet` rows keep any mismatch auditable.
 - **Lost-job safety net:** a repeatable **sweeper** job (every 60s) finds tournaments with `endsAt < now` still `ACTIVE` and re-enqueues finalization. Deterministic job IDs (`finalize-<tournamentId>`) prevent double-scheduling; the processor's status check makes a race harmless anyway. So finalization survives a Redis flush or a worker that was down at fire time.
 
 ### Leaderboard reads
 
 - Live: `ZRANGE … REV WITHSCORES` + `ZCARD`, rank = offset + position + 1.
 - Finalized: `TournamentPlacement` rows ordered by rank.
-- Tie ranks: the *final* snapshot uses competition ranking with `playerId` as a deterministic tie-break; the *live* view shows positional ranks (a ZSET has a total order). Documented rather than hidden.
+- Tie ranks differ by source: the final snapshot uses competition ranking (ties share a rank) broken by `playerId`; the live view shows positional ranks from the ZSET's total order.
 
 ## Assumptions & tradeoffs
 
@@ -117,7 +117,7 @@ Redis is therefore a **derived view** of the `Bet` table — a live-read cache, 
 ## Tests
 
 ```bash
-npm test        # unit — no infra needed (14 tests)
+npm test        # unit — no infra needed (23 tests)
 npm run test:int  # integration — needs docker compose up -d (6 tests)
 ```
 

@@ -18,9 +18,8 @@ export interface ApplyBetCommand {
 const betIdsKey = (tournamentId: string) => `t:{${tournamentId}}:betIds`;
 const leaderboardKey = (tournamentId: string) => `t:{${tournamentId}}:lb`;
 
-// Marks the externalBetId as seen and increments the player's score in one
-// atomic step, so a concurrent duplicate can never double-count. Returns 1 if
-// the bet was applied, 0 if it was already counted.
+// Atomic check-and-increment so concurrent duplicates can't double-count.
+// Returns 1 if applied, 0 if already counted.
 const APPLY_BET_LUA = `
 if redis.call('SADD', KEYS[1], ARGV[1]) == 1 then
   redis.call('ZINCRBY', KEYS[2], ARGV[2], ARGV[3])
@@ -47,11 +46,7 @@ export class LeaderboardStore {
     this.redis.defineCommand('applyBet', { numberOfKeys: 2, lua: APPLY_BET_LUA });
   }
 
-  /**
-   * Applies a batch of accepted bets, one Lua call per tournament, in a single
-   * pipelined round trip. Returns whether each bet was newly applied (true) or
-   * already counted (false).
-   */
+  /** One Lua call per tournament, pipelined. Returns whether each was newly applied. */
   async applyBets(commands: ApplyBetCommand[]): Promise<boolean[]> {
     if (commands.length === 0) return [];
     const pipeline = this.redis.pipeline();

@@ -9,7 +9,6 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableShutdownHooks();
 
-  // Interactive API docs at /docs — set SWAGGER=off to disable (e.g. in prod).
   if (process.env.SWAGGER !== 'off') {
     const config = new DocumentBuilder()
       .setTitle('RealPlay Tournaments API')

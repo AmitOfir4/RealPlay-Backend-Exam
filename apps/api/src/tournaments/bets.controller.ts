@@ -8,8 +8,6 @@ import { IngestBetDto } from './dto/ingest-bet.dto';
 export class BetsController {
   constructor(private readonly bets: BetsService) {}
 
-  // Duplicates are a success (200), not an error — the event is simply
-  // acknowledged without counting twice.
   @Post()
   @HttpCode(200)
   @ApiOperation({

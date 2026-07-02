@@ -68,7 +68,6 @@ describe('BetsService', () => {
     const { service, store } = makeService(['t1'], [false]);
     const result = await service.ingest(dto);
 
-    // the Lua SADD guard said "already counted" — no score change, still a 2xx
     expect(store.applyBets).toHaveBeenCalledTimes(1);
     expect(result.results).toEqual([{ tournamentId: 't1', accepted: false, duplicate: true }]);
   });

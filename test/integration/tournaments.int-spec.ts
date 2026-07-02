@@ -85,7 +85,6 @@ describe('Tournaments (integration)', () => {
       ...over,
     });
 
-    // first ingestion counts towards both open tournaments
     const first = await post('/bet', bet());
     expect(first.status).toBe(200);
     const forA = first.body.results.find((r: any) => r.tournamentId === a.id);
@@ -93,12 +92,11 @@ describe('Tournaments (integration)', () => {
     expect(forA).toEqual({ tournamentId: a.id, accepted: true, duplicate: false });
     expect(forB).toEqual({ tournamentId: b.id, accepted: true, duplicate: false });
 
-    // exact duplicate: success response, no double counting
     const dup = await post('/bet', bet());
     expect(dup.status).toBe(200);
     expect(dup.body.results.every((r: any) => r.duplicate)).toBe(true);
 
-    // second player, and an older bet that only fits B's wider window
+    // bet_3 is older, so it only fits B's wider window
     await post('/bet', bet({ externalBetId: 'bet_2', playerId: 'p2', amount: 500 }));
     await post('/bet', bet({ externalBetId: 'bet_3', playerId: 'p1', amount: 100, createdAt: iso(-1.5 * HOUR) }));
 
@@ -116,7 +114,6 @@ describe('Tournaments (integration)', () => {
       { rank: 2, playerId: 'p1', score: 350 },
     ]);
 
-    // pagination keeps absolute ranks
     const page2 = (await get(`/tournaments/${a.id}/leaderboard?limit=1&offset=1`)).body;
     expect(page2.entries).toEqual([{ rank: 2, playerId: 'p1', score: 250 }]);
   });
@@ -150,7 +147,6 @@ describe('Tournaments (integration)', () => {
   });
 
   it('finalizes an ended tournament through the worker and serves final placements', async () => {
-    // already-ended window: the finalize job fires immediately once a worker is up
     const ended = (
       await post('/tournaments', { name: 'Ended', startsAt: iso(-2 * HOUR), endsAt: iso(-60_000) })
     ).body;
@@ -158,7 +154,7 @@ describe('Tournaments (integration)', () => {
     const bet = (externalBetId: string, playerId: string, amount: number) =>
       post('/bet', { externalBetId, playerId, amount, currency: 'USD', createdAt: iso(-HOUR) });
 
-    // p1 and p2 tie at 300, p3 trails — bets land before the worker boots
+    // p1 and p2 tie at 300
     await bet('bet_f1', 'p1', 150);
     await bet('bet_f2', 'p1', 150);
     await bet('bet_f3', 'p2', 300);

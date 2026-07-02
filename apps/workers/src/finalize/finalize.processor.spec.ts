@@ -23,7 +23,7 @@ function makeProcessor(tournament: any, grouped: any[] = []) {
 
 describe('FinalizeProcessor', () => {
   it('aggregates standings from Postgres (not Redis) and writes competition ranks', async () => {
-    // p1 and p2 tie at 300, p3 trails — already ordered score DESC, playerId ASC
+    // p1/p2 tie at 300, ordered as the query returns them
     const { processor, groupBy, createMany, leaderboard } = makeProcessor(
       { id: 't1', status: 'ACTIVE' },
       [

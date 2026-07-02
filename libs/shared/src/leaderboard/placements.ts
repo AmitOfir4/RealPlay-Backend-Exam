@@ -5,9 +5,8 @@ export interface PlacementRow {
 }
 
 /**
- * Assigns final ranks from sorted standings using standard competition
- * ranking ("1224"): tied scores share a rank, and the next distinct score
- * skips past them. Input must already be sorted score DESC.
+ * Competition ranking ("1224"): ties share a rank, the next distinct score
+ * skips past them. Input must be sorted score DESC.
  */
 export function computePlacements(
   standings: Array<{ playerId: string; score: number }>,

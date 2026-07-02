@@ -66,7 +66,6 @@ describe('SweeperService.sweep', () => {
 
     await expect(sweeper.sweep()).resolves.toBeUndefined();
 
-    // t1 threw, but t2 was still re-added
     expect(queue.add).toHaveBeenCalledWith(
       'finalize',
       { tournamentId: 't2' },

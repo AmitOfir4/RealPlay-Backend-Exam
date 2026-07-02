@@ -26,7 +26,7 @@ model Tournament {
   @@index([startsAt, endsAt])
   // sweeper: overdue ACTIVE tournaments
   @@index([status, endsAt])
-  // list active tournaments, newest first (GET /tournaments) — index-ordered, no sort step
+  // GET /tournaments listing
   @@index([status, createdAt])
 }
 
@@ -43,8 +43,7 @@ model Bet {
 
   // durable idempotency: one externalBetId per tournament
   @@unique([tournamentId, externalBetId])
-  // finalization + leaderboard rebuild: SUM(amount) per player. amount is in the
-  // index so the aggregate runs as an index-only scan (no heap fetches).
+  // finalization + rebuild: SUM(amount) per player, index-only scan
   @@index([tournamentId, playerId, amount])
 }
 
