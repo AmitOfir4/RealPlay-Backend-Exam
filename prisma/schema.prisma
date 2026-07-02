@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TournamentStatus {
+  ACTIVE
+  FINALIZED
+}
+
+model Tournament {
+  id         String              @id @default(uuid())
+  name       String
+  startsAt   DateTime
+  endsAt     DateTime
+  status     TournamentStatus    @default(ACTIVE)
+  createdAt  DateTime            @default(now())
+  bets       Bet[]
+  placements TournamentPlacement[]
+
+  // window lookup on bet ingestion
+  @@index([startsAt, endsAt])
+  // sweeper: overdue ACTIVE tournaments
+  @@index([status, endsAt])
+  // list active tournaments, newest first (GET /tournaments) — index-ordered, no sort step
+  @@index([status, createdAt])
+}
+
+model Bet {
+  id            String     @id @default(uuid())
+  tournamentId  String
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+  externalBetId String
+  playerId      String
+  amount        Int // cents
+  currency      String
+  createdAt     DateTime // event time from the client payload
+  ingestedAt    DateTime   @default(now())
+
+  // durable idempotency: one externalBetId per tournament
+  @@unique([tournamentId, externalBetId])
+  // leaderboard rebuild: sum per player
+  @@index([tournamentId, playerId])
+}
+
+model TournamentPlacement {
+  id           String     @id @default(uuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  playerId     String
+  rank         Int
+  score        Int // cents
+
+  @@unique([tournamentId, playerId])
+  @@index([tournamentId, rank])
+}
